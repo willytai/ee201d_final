@@ -81,7 +81,7 @@ fcroute -type signal -designStyle pio -layerChangeBotLayer metal7 -layerChangeTo
            bumpTcl)
 
 
-    return fp_tcl
+    return fp_tcl, finalArea, constraints['defectDens']
 
 
 def parse():
@@ -91,5 +91,8 @@ def parse():
     return parser.parse_args()
 
 if __name__ == '__main__':
+    tcl, finalArea, defectDensity = main(parse())
     with open('fp_soc.tcl', 'w') as f:
-        f.write(main(parse()))
+        f.write(tcl)
+    print ('Die Area: {} (um^2)'.format(finalArea))
+    print ('Defect Density: {} (per cm^2)'.format(defectDensity))

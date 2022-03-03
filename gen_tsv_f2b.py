@@ -66,11 +66,13 @@ def tsvTCL(netlist, tsvPitchF2B, ioCellHeight, coreDim, spacing, pgTSVs, f2b):
         #      globalNetConnect VDD/VSS -sinst <instance name> -pin <pin name>
         #      (pg tsv and pg ubumps are named)
         tsvTcl += 'addInst -cell TSVD_IN -inst ptsv{} -loc {{{} {}}} -status placed\n'.format(uniqueID, x, y)
+        tsvTcl += 'globalNetConnect VDD -type pgpin -sinst ptsv{} -pin in\n'.format(uniqueID)
         uBumpTcl += 'create_bump -cell BUMPCELL_TSV -name_format pubump{} -loc {} {}\n'.format(uniqueID, x+TSVWIDTH/2, y+TSVWIDTH/2)
         x, y = nextPos(x, y)
         uniqueID += 1
 
         tsvTcl += 'addInst -cell TSVD_IN -inst gtsv{} -loc {{{} {}}} -status placed\n'.format(uniqueID, x, y)
+        tsvTcl += 'globalNetConnect VSS -type pgpin -sinst gtsv{} -pin in\n'.format(uniqueID)
         uBumpTcl += 'create_bump -cell BUMPCELL_TSV -name_format gubump{} -loc {} {}\n'.format(uniqueID, x+TSVWIDTH/2, y+TSVWIDTH/2)
         x, y = nextPos(x, y)
         uniqueID += 1
@@ -80,6 +82,10 @@ def tsvTCL(netlist, tsvPitchF2B, ioCellHeight, coreDim, spacing, pgTSVs, f2b):
         ctype = 'p'
         while True:
             tsvTcl += 'addInst -cell TSVD_IN -inst {}tsv{} -loc {{{} {}}} -status placed\n'.format(ctype, uniqueID, x, y)
+            if ctype == 'p':
+                tsvTcl += 'globalNetConnect VDD -type pgpin -sinst ptsv{} -pin in\n'.format(uniqueID)
+            else:
+                tsvTcl += 'globalNetConnect VSS -type pgpin -sinst gtsv{} -pin in\n'.format(uniqueID)
             uBumpTcl += 'create_bump -cell BUMPCELL_TSV -name_format {}ubump{} -loc {} {}\n'.format(ctype, uniqueID, x+TSVWIDTH/2, y+TSVWIDTH/2)
             x, y = nextPos(x, y)
             uniqueID += 1

@@ -75,9 +75,10 @@ def main(args):
     else:
         # final spacing to fit IO cells and tsv
         spacing = constraints['tsvPitchF2B']*(nRings4TSV-1) + constraints['tsvPitchF2B']*(TSV2ioCellSpacingRatio+TSV2CoreBoxSpacingRatio) + TSVWIDTH
-    print (targetCoreSize)
-    print (nRings4TSV)
-    print (spacing)
+    # print (targetCoreSize)
+    # print (nRings4TSV)
+    # print (spacing)
+    finalArea = max(minArea1, minArea2)
     # 5. final floorplan dimension
     coreDim = round(targetCoreSize)
 
@@ -170,7 +171,7 @@ fcroute -type signal -designStyle pio -layerChangeBotLayer metal7 -layerChangeTo
     with open('riscv_core_ubump_f2b.tcl', 'w') as f:
         f.write(uBumpTcl)
 
-    return fp_tcl_bot, fp_tcl_top
+    return fp_tcl_bot, fp_tcl_top, finalArea, constraints['defectDens']
 
 
 def parse():
@@ -182,8 +183,13 @@ def parse():
     return parser.parse_args()
 
 if __name__ == '__main__':
-    bot, top = main(parse())
+    bot, top, finalArea, defectDensity = main(parse())
     with open('fp_3d_f2b_bottom.tcl', 'w') as f:
         f.write(bot)
     with open('fp_3d_f2b_top.tcl', 'w') as f:
         f.write(top)
+
+    print ('Bot Die Area: {} (um^2)'.format(finalArea))
+    print ('Top Die Area: {} (um^2)'.format(finalArea))
+    print ('Defect Density: {} (per cm^2)'.format(defectDensity))
+
