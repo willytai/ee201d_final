@@ -25,7 +25,7 @@ def tsvTCL(netlist, tsvPitchF2B, ioCellHeight, coreDim, spacing, pgTSVs, f2b):
     with open(netlist, 'r') as f:
         for line in f:
             line = line.strip()
-            if line.startswith('TSV'):
+            if line.startswith('TSV_'):
                 tsvModule = line.split()[1]
                 tsvName = tsvModule.split('(')[0]
                 tsvPool.append(tsvName)
@@ -63,6 +63,7 @@ def tsvTCL(netlist, tsvPitchF2B, ioCellHeight, coreDim, spacing, pgTSVs, f2b):
     for _ in range(0, pgTSVs, 2):
         # TODO probably need to tell innovus how to connect VDD and VSS to these tsvs later
         #      or connect the ubumps to the pg tsv (how the fuck do i do this?)
+        #      globalNetConnect VDD/VSS -sinst <instance name> -pin <pin name>
         #      (pg tsv and pg ubumps are named)
         tsvTcl += 'addInst -cell TSVD_IN -inst ptsv{} -loc {{{} {}}} -status placed\n'.format(uniqueID, x, y)
         uBumpTcl += 'create_bump -cell BUMPCELL_TSV -name_format pubump{} -loc {} {}\n'.format(uniqueID, x+TSVWIDTH/2, y+TSVWIDTH/2)

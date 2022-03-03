@@ -34,6 +34,8 @@ def parse_constraints(filename):
             if key == 'tsvPitchF2F': val = int(val)
             if key == 'ioCellWidth': val = float(val)
             if key == 'ioCellHeight': val = float(val)
+            if key == 'io3DCellWidth': val = float(val)
+            if key == 'io3DCellHeight': val = float(val)
             if key == 'defectDens': val = float(val)
             if key == 'currDen': val = float(val)
             info[key] = val

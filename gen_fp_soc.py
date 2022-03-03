@@ -8,14 +8,6 @@ def main(args):
     # parse tech constraint (ex: tech_const_1.txt)
     constraints = parse_constraints(args.tech_const)
 
-    ################
-    # for IO bumps #
-    ################
-    # give an pessimistic estimation of how many IO bumps are required per side
-    # round up
-    ioCellNumPerSide = info['ioCount'] // 4
-    if abs(info['ioCount']/4.0 - ioCellNumPerSide) > 1e-6: ioCellNumPerSide += 1
-
 
     ################
     # for PG bumps #
@@ -29,66 +21,54 @@ def main(args):
     if pgBumps == 1: pgBumps += 1
     # 1:1 pgBumps
     pgBumps *= 2
-    # find the smallest square value that is greater than pgBumps
-    pgBumpsRow = math.sqrt(pgBumps)
-    if abs(int(pgBumpsRow)-pgBumpsRow) > 1e-6: pgBumpsRow += 1
-    pgBumpsRow = int(pgBumpsRow)
-    pgBumpsCol = int(pgBumpsRow)
 
 
     #################
     # for floorplan #
     #################
+    minTotalBumps = pgBumps + info['ioCount']
+    minSize4Bumps = math.sqrt(minTotalBumps)
+    if abs(int(minSize4Bumps)-minSize4Bumps) > 1e-6: minSize4Bumps += 1
+    minArea1 = ((minSize4Bumps-1)*constraints['bumpPitchSoC'])**2
     # spacing to fit IO cells
-    spacing = constraints['ioCellHeight'] * 2
-    # raw dimension (including io boundary)
-    rawDim = math.ceil(math.sqrt(info['designArea']))
-    # core dimension (subtract spacing)
-    coreDim = rawDim - spacing
+    minSpacing = constraints['ioCellHeight']*2
+    targetCoreSize = math.ceil(math.sqrt(info['designArea']/info['targetUtil']))
+    coreDim = round(targetCoreSize)
+    minArea2 = (coreDim+minSpacing*2)**2
+    finalArea = max(minArea1, minArea2)
+    spacing = round((math.sqrt(finalArea)-coreDim)/2, 2)
+
+
+    ###############
+    # bump script #
+    ###############
+    dieDim = coreDim + spacing*2 - constraints['ioCellHeight']*0.5
+    pitch = constraints['bumpPitchSoC']
+    bumpPerSide = 2
+    while (bumpPerSide-1)*pitch < dieDim:
+        bumpPerSide += 1
+    bumpPerSide -= 1
+    pitch = math.floor(dieDim / (bumpPerSide -1) * 100) / 100
+    bumpTcl = '''\
+create_bump -cell BUMPCELL -pitch [list {0} {0}] -pattern_side [list left {1}]\\
+            -edge_spacing [list [expr {2}] [expr {2}] [expr {2}] [expr {2}]]'''.format(pitch, bumpPerSide, constraints['ioCellHeight'])
 
 
     ####################
     # final tcl script #
     ####################
-    fp_tcl = '''# utilization
-set UTIL {0}
-
+    fp_tcl = '''\
 #############
 # floorPlan #
 #############
-floorPlan -site FreePDK45_38x28_10R_NP_162NW_34O -s {1} {1} {2} {2} {2} {2}
-floorPlan -keepShape $UTIL
+floorPlan -site FreePDK45_38x28_10R_NP_162NW_34O -s {0} {0} {1} {1} {1} {1}
 
-################
-# for IO bumps #
-################
-set ioCellNumX {3}
-set ioCellNumY {3}
-set ioBumpBudgetX [expr [dbGet top.fPlan.box_sizex]-2.1*{4}]
-set ioBumpBudgetY [expr [dbGet top.fPlan.box_sizey]-2.1*{4}]
-set ioBumpPitchX [max {5} [expr $ioBumpBudgetX / [expr $ioCellNumX-1.0]]]
-set ioBumpPitchY [max {5} [expr $ioBumpBudgetY / [expr $ioCellNumY-1.0]]]
-
-# recalculate pitch so that bumps distribute evenly
-set ioBumpPitchX [expr $ioBumpBudgetX / [expr floor($ioBumpBudgetX / $ioBumpPitchX)]]
-set ioBumpPitchY [expr $ioBumpBudgetY / [expr floor($ioBumpBudgetY / $ioBumpPitchY)]]
-
-# create IO bumps
-set ioMarginX {4}
-set ioMarginY {4}
-create_bump -cell BUMPCELL -pitch [list [expr $ioBumpPitchX] [expr $ioBumpPitchY]] -pattern_side [list left [expr $ioBumpBudgetX / $ioBumpPitchX + 1]] \\
-            -edge_spacing [list [expr $ioMarginX] [expr $ioMarginY] [expr $ioMarginX] [expr $ioMarginY]]
-
-# assign IO bumps and delete the floating bumps
+#############
+# for bumps #
+#############
+{2}
 assignBump
-deleteBumps -floating
-
-
-################
-# for PG bumps #
-################
-create_bump -cell BUMPCELL -pitch [list [expr $ioBumpPitchX] [expr $ioBumpPitchY]] -pattern_center {{{6} {7}}}
-assignPGBumps -nets {{VDD VSS}} -floating -checkerboard
+assignPGBumps -nets {{VDD VSS}} -floating -V
 
 
 ##########################################
@@ -96,14 +76,10 @@ assignPGBumps -nets {{VDD VSS}} -floating -checkerboard
 ##########################################
 setFlipChipMode -route_style 45DegreeRoute
 fcroute -type signal -designStyle pio -layerChangeBotLayer metal7 -layerChangeTopLayer metal10 -routeWidth 0
-'''.format(info['targetUtil'],
-           coreDim,
+'''.format(coreDim,
            spacing,
-           ioCellNumPerSide,
-           constraints['ioCellHeight'],
-           constraints['bumpPitchSoC'],
-           pgBumpsRow,
-           pgBumpsCol)
+           bumpTcl)
+
 
     return fp_tcl
 
