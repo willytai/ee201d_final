@@ -1,7 +1,8 @@
-import argparse, subprocess, os
+import argparse, os, subprocess
 from gen_fp_soc import soc
 from gen_fp_3d_f2b import f2b
 from yield_model import *
+from runInnovus import runInnovusSoC, runInnovusF2B, runInnovusF2F
 
 endcolor = '\033[0m'
 red      = '\033[1;31m'
@@ -49,11 +50,11 @@ def main(args):
 
     # invoke innovus with subprocess
     if flow == 'soc':
-        raise NotImplementedError('soc flow')
+        runInnovusSoC()
     elif flow == 'f2b':
-        raise NotImplementedError('f2b flow')
+        runInnovusF2B()
     elif flow == 'f2f':
-        raise NotImplementedError('f2f flow')
+        runInnovusF2F()
 
 def parse():
     parser = argparse.ArgumentParser()

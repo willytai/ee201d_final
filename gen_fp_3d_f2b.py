@@ -292,9 +292,10 @@ def main(args):
     return f2b(args.design_info_bot, args.design_info_top, args.tech_const, args.design_netlist, args.script_dir)
 
 if __name__ == '__main__':
-    finalArea, defectDensity, tsvCount = main(parse())
+    finalArea, defectDensity, tsvCount, wireBonds = main(parse())
     print ('Bot Die Area: {} (um^2)'.format(finalArea))
     print ('Top Die Area: {} (um^2)'.format(finalArea))
     print ('Total TSVs: {}'.format(tsvCount))
     print ('Defect Density: {} (per cm^2)'.format(defectDensity))
+    print ('# Wire Bonds: {}'.format(wireBonds))
 
