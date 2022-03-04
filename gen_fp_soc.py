@@ -1,12 +1,12 @@
-import sys, argparse
+import argparse, os
 import math
 from parser import parse_info, parse_constraints
 
-def main(args):
+def soc(design_info, tech_const, script_dir):
     # parse design info (ex: riscv_soc_io.rep)
-    info = parse_info(args.design_info)
+    info = parse_info(design_info)
     # parse tech constraint (ex: tech_const_1.txt)
-    constraints = parse_constraints(args.tech_const)
+    constraints = parse_constraints(tech_const)
 
 
     ################
@@ -21,6 +21,7 @@ def main(args):
     if pgBumps == 1: pgBumps += 1
     # 1:1 pgBumps
     pgBumps *= 2
+    print (f'{pgBumps=}')
 
 
     #################
@@ -37,6 +38,7 @@ def main(args):
     minArea2 = (coreDim+minSpacing*2)**2
     finalArea = max(minArea1, minArea2)
     spacing = round((math.sqrt(finalArea)-coreDim)/2, 2)
+    print (f'{spacing=}')
 
 
     ###############
@@ -52,6 +54,7 @@ def main(args):
     bumpTcl = '''\
 create_bump -cell BUMPCELL -pitch [list {0} {0}] -pattern_side [list left {1}]\\
             -edge_spacing [list [expr {2}] [expr {2}] [expr {2}] [expr {2}]]'''.format(pitch, bumpPerSide, constraints['ioCellHeight'])
+    print (f'{bumpPerSide=}')
 
 
     ####################
@@ -68,7 +71,7 @@ floorPlan -site FreePDK45_38x28_10R_NP_162NW_34O -s {0} {0} {1} {1} {1} {1}
 #############
 {2}
 assignBump
-assignPGBumps -nets {{VDD VSS}} -floating -V
+assignPGBumps -nets {{VDD VSS}} -floating -checkerboard
 
 
 ##########################################
@@ -80,19 +83,23 @@ fcroute -type signal -designStyle pio -layerChangeBotLayer metal7 -layerChangeTo
            spacing,
            bumpTcl)
 
+    with open(os.path.join(script_dir, 'fp_soc.tcl'), 'w') as f:
+        f.write(fp_tcl)
 
-    return fp_tcl, finalArea, constraints['defectDens']
+    return finalArea, constraints['defectDens']
 
 
 def parse():
     parser = argparse.ArgumentParser()
     parser.add_argument('--design-info', required=True, type=str)
     parser.add_argument('--tech-const', required=True, type=str)
+    parser.add_argument('--script-dir', required=False, type=str, default='./')
     return parser.parse_args()
 
+def main(args):
+    return soc(args.design_info, args.tech_const, args.script_dir)
+
 if __name__ == '__main__':
-    tcl, finalArea, defectDensity = main(parse())
-    with open('fp_soc.tcl', 'w') as f:
-        f.write(tcl)
+    finalArea, defectDensity = main(parse())
     print ('Die Area: {} (um^2)'.format(finalArea))
     print ('Defect Density: {} (per cm^2)'.format(defectDensity))

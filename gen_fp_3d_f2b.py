@@ -1,17 +1,124 @@
-import sys, argparse, math
+import sys, argparse, math, os
 from parser import parse_info, parse_constraints
-from gen_tsv_f2b import tsvTCL, TSVWIDTH, TSV2ioCellSpacingRatio, TSV2CoreBoxSpacingRatio
+from gen_tsv_f2b import box, TSVWIDTH, TSV2ioCellSpacingRatio, TSV2CoreBoxSpacingRatio
 
 
-def main(args):
-    botInfo = parse_info(args.design_info_bot)
-    topInfo = parse_info(args.design_info_top)
-    constraints = parse_constraints(args.tech_const)
+def tsvTCL(tsvPool, tsvPitch, spacing, pgTSVs, start, dieDim, coreDim, ioCellHeight):
+    # boundary
+    endx, endy = dieDim - start, dieDim - start
+    startx, starty = start, start
+    # forbidden box (core area)
+    forbidden = box(spacing+ioCellHeight, spacing+ioCellHeight, coreDim)
+
+    # helper function
+    # state: right, up, left, down
+    #        0      1   2     3
+    def nextPos(x, y, state, startx, starty, endx, endy):
+        if state == 0:
+            x += tsvPitch
+        elif state == 1:
+            y += tsvPitch
+        elif state == 2:
+            x -= tsvPitch
+        elif state == 3:
+            y -= tsvPitch
+        # check if valid
+        if x+TSVWIDTH > endx:
+            x -= tsvPitch
+            state = 1
+            return nextPos(x, y, state, startx, starty, endx, endy)
+        if y+TSVWIDTH > endy:
+            y -= tsvPitch
+            state = 2
+            return nextPos(x, y, state, startx, starty, endx, endy)
+        if x < startx:
+            x += tsvPitch
+            state = 3
+            return nextPos(x, y, state, startx, starty, endx, endy)
+        if y <= starty and state == 3:
+            startx, starty = startx+tsvPitch, starty+tsvPitch
+            endx, endy = endx-tsvPitch, endy-tsvPitch
+            x, y = startx, starty
+            state = 0
+        if forbidden.contains(x, y) or forbidden.contains(x+TSVWIDTH, y) or forbidden.contains(x, y+TSVWIDTH) or forbidden.contains(x+TSVWIDTH, y+TSVWIDTH):
+            print (x, y, 'is contained in', forbidden)
+            raise ValueError
+        return x, y, state, startx, starty, endx, endy
+    
+    tsvCount = 0
+    tsvTcl = ''
+    uBumpTcl = ''
+    x, y = startx-tsvPitch, starty
+    state = 0
+    for tsv in tsvPool:
+        x, y, state, startx, starty, endx, endy = nextPos(x, y, state, startx, starty, endx, endy)
+        tsvTcl += 'placeInstance {} {} {} -placed\n'.format(tsv, x-TSVWIDTH/2, y-TSVWIDTH/2)
+        uBumpTcl += 'create_bump -cell BUMPCELL_TSV -loc {} {}\n'.format(x, y)
+        tsvCount += 1
+
+    # required pg tsv and ubumps
+    uniqueID = 0
+    for _ in range(0, pgTSVs, 2):
+        x, y, state, startx, starty, endx, endy = nextPos(x, y, state, startx, starty, endx, endy)
+        tsvTcl += 'addInst -cell TSVD_IN -inst ptsv{} -loc {{{} {}}} -status placed\n'.format(uniqueID, x-TSVWIDTH/2, y-TSVWIDTH/2)
+        tsvTcl += 'globalNetConnect VDD -type pgpin -sinst ptsv{} -pin in\n'.format(uniqueID)
+        uBumpTcl += 'create_bump -cell BUMPCELL_TSV -name_format pubump{} -loc {} {}\n'.format(uniqueID, x, y)
+        uniqueID += 1
+        tsvCount += 1
+
+        x, y, state, startx, starty, endx, endy = nextPos(x, y, state, startx, starty, endx, endy)
+        tsvTcl += 'addInst -cell TSVD_IN -inst gtsv{} -loc {{{} {}}} -status placed\n'.format(uniqueID, x-TSVWIDTH/2, y-TSVWIDTH/2)
+        tsvTcl += 'globalNetConnect VSS -type pgpin -sinst gtsv{} -pin in\n'.format(uniqueID)
+        uBumpTcl += 'create_bump -cell BUMPCELL_TSV -name_format gubump{} -loc {} {}\n'.format(uniqueID, x, y)
+        uniqueID += 1
+        tsvCount += 1
+
+    # fill the rest of the space with pg tsvs (no harm)
+    # harms yield
+    # try:
+    #     ctype = 'p'
+    #     while True:
+    #         x, y, state, startx, starty, endx, endy = nextPos(x, y, state, startx, starty, endx, endy)
+    #         tsvTcl += 'addInst -cell TSVD_IN -inst {}tsv{} -loc {{{} {}}} -status placed\n'.format(ctype, uniqueID, x-TSVWIDTH/2, y-TSVWIDTH/2)
+    #         tsvCount += 1
+    #         if ctype == 'p':
+    #             tsvTcl += 'globalNetConnect VDD -type pgpin -sinst ptsv{} -pin in\n'.format(uniqueID)
+    #         else:
+    #             tsvTcl += 'globalNetConnect VSS -type pgpin -sinst gtsv{} -pin in\n'.format(uniqueID)
+    #         uBumpTcl += 'create_bump -cell BUMPCELL_TSV -name_format {}ubump{} -loc {} {}\n'.format(ctype, uniqueID, x, y)
+    #         uniqueID += 1
+    #         if ctype == 'p': ctype = 'g'
+    #         else: ctype = 'p'
+    # except Exception as e:
+    #     pass
+
+    return tsvTcl, uBumpTcl, tsvCount
 
 
-    ################
-    # for PG bumps #
-    ################
+def f2b(design_info_bot, design_info_top, tech_const, design_netlist, script_dir):
+    botInfo = parse_info(design_info_bot)
+    topInfo = parse_info(design_info_top)
+    constraints = parse_constraints(tech_const)
+    bumpPitch = constraints['bumpPitchSoC']
+    tsvPitch = constraints['tsvPitchF2B']
+    ioCellHeight = constraints['ioCellHeight']
+    margin = 30
+
+
+    ##################
+    # core area size #
+    ##################
+    # found to multiple of bump pitch
+    botCoreArea = botInfo['designArea'] / botInfo['targetUtil']
+    topCoreArea = topInfo['designArea'] / topInfo['targetUtil']
+    targetCoreSize = math.sqrt(max(botCoreArea, topCoreArea))
+    coreDim = math.ceil(targetCoreSize / bumpPitch) * bumpPitch
+    print (f'{coreDim=}')
+
+
+    #########
+    # bumps #
+    #########
     # want most compact area, calculate bump current with min area
     # this calculates the min bumps required to satisfy the power and current density constraints
     # bottom die needs to provide power to the top die
@@ -21,13 +128,28 @@ def main(args):
     pgBumps = targetCurr // currPerBump + 1
     if pgBumps == 1: pgBumps += 1
     # 1:1 pgBumps
-    pgBumps *= 2
-    # find the smallest square value that is greater than pgBumps
-    pgBumpsRow = math.sqrt(pgBumps)
-    if abs(int(pgBumpsRow)-pgBumpsRow) > 1e-6: pgBumpsRow += 1
-    pgBumpsRow = int(pgBumpsRow)
-    pgBumpsCol = int(pgBumpsRow)
-    #print ('pgBumps', pgBumps)
+    pgBumps = int(pgBumps * 2)
+    ioBumps = botInfo['ioCount']
+    minTotalBumps = pgBumps + ioBumps
+    # round total bumps to a square value
+    finalTotalBumps = int(math.ceil(math.sqrt(minTotalBumps)) ** 2)
+    bumpsPerSide = int(math.sqrt(finalTotalBumps))
+    print (f'{pgBumps=}')
+    print (f'{ioBumps=}')
+    print (f'{minTotalBumps=} (pgBumps + ioBumps)')
+    print (f'{finalTotalBumps=} (to square value)')
+    print (f'{bumpsPerSide=}')
+
+
+    ############
+    # die size #
+    ############
+    dieDim = (bumpsPerSide - 1)*bumpPitch + 2*margin
+    while dieDim < coreDim:
+        bumpsPerSide += 1
+        dieDim += bumpPitch
+    print (f'{bumpsPerSide=} (after die size adjustment)')
+    print (f'{dieDim=}')
 
 
     ###############
@@ -40,62 +162,50 @@ def main(args):
     pgTSVs = targetCurr // currPerTSV + 1
     if pgTSVs == 1: pgTSVs += 1
     # 1:1 pgTSVs
-    pgTSVs *= 2
-    #print ('pgTSVs', pgTSVs)
+    pgTSVs = int(pgTSVs * 2)
+    print (f'{pgTSVs=}')
 
 
     #################
     # for floorplan #
     #################
-    # 1. min area for min number of total bumps
-    minTotalBumps = pgBumps + botInfo['ioCount']
-    minSize4Bumps = math.sqrt(minTotalBumps)
-    if abs(int(minSize4Bumps)-minSize4Bumps) > 1e-6: minSize4Bumps += 1
-    minArea1 = ((minSize4Bumps-1)*constraints['bumpPitchSoC'])**2
-    # 2. find the core size which is the max of top and bot die
-    botCoreArea = botInfo['designArea'] / botInfo['targetUtil']
-    topCoreArea = topInfo['designArea'] / topInfo['targetUtil']
-    targetCoreSize = math.ceil(math.sqrt(max(botCoreArea, topCoreArea)))
-    # 3. min area for accounting for min number of tsv
-    #    round core size to the min value that is greater than orgianl size and is a multiple of tsv pitch
-    tmp = (targetCoreSize // constraints['tsvPitchF2B']) * constraints['tsvPitchF2B']
-    targetCoreSize = tmp+constraints['tsvPitchF2B'] if tmp < targetCoreSize else tmp
-    targetTSVPlaceStartSize = targetCoreSize + 2*(TSV2ioCellSpacingRatio*constraints['tsvPitchF2B'])
-    totalTSVs = botInfo['tsvCount'] + pgTSVs
-    poolTSVs = int(totalTSVs)
-    nRings4TSV = 0
-    while poolTSVs > 0:
-        poolTSVs -= (4*(targetTSVPlaceStartSize//constraints['tsvPitchF2B']) - 4)
-        targetTSVPlaceStartSize += 2*constraints['tsvPitchF2B']
-        nRings4TSV += 1
-    minArea2 = (targetTSVPlaceStartSize+2*(TSV2ioCellSpacingRatio*constraints['tsvPitchF2B'])+2*constraints['ioCellHeight'])**2
-    # 4. adjust spacing
-    if minArea1 > minArea2:
-        spacing = minSize4Bumps - targetCoreSize
-    else:
-        # final spacing to fit IO cells and tsv
-        spacing = constraints['tsvPitchF2B']*(nRings4TSV-1) + constraints['tsvPitchF2B']*(TSV2ioCellSpacingRatio+TSV2CoreBoxSpacingRatio) + TSVWIDTH
-    # print (targetCoreSize)
-    # print (nRings4TSV)
-    # print (spacing)
-    finalArea = max(minArea1, minArea2)
-    # 5. final floorplan dimension
-    coreDim = round(targetCoreSize)
+    # increase dieDim by bumpPitch each round until all TSV fits
+    tsvPool = list()
+    with open(design_netlist, 'r') as f:
+        for line in f:
+            line = line.strip()
+            if line.startswith('TSV_'):
+                tsvModule = line.split()[1]
+                tsvName = tsvModule.split('(')[0]
+                tsvPool.append(tsvName)
+    flag = True
+    while flag:
+        try:
+            print (f'{bumpsPerSide=} {dieDim=}')
+            flag = False
+            spacing = (dieDim - coreDim - 2*ioCellHeight) / 2
+            tsvTcl, uBumpTcl, tsvCount = tsvTCL(tsvPool, tsvPitch, spacing, pgTSVs, margin, dieDim, coreDim, ioCellHeight)
+        except Exception as e:
+            flag = True
+            dieDim += bumpPitch
+            bumpsPerSide += 1
+    finalArea = dieDim**2
+    print (f'{spacing=}')
+
+
+    ############################
+    # Gen TSV and ubump script #
+    ############################
+    with open(os.path.join(script_dir, 'riscv_core_tsv_f2b.tcl'), 'w') as f:
+        f.write('{}'.format(tsvTcl))
+    with open(os.path.join(script_dir, 'riscv_core_ubump_f2b.tcl'), 'w') as f:
+        f.write('{}'.format(uBumpTcl))
 
 
     ###############
     # bump script #
     ###############
-    dieDim = coreDim + spacing*2 - constraints['ioCellHeight']*0.5
-    pitch = constraints['bumpPitchSoC']
-    bumpPerSide = 2
-    while (bumpPerSide-1)*pitch < dieDim:
-        bumpPerSide += 1
-    bumpPerSide -= 1
-    pitch = math.floor(dieDim / (bumpPerSide -1) * 100) / 100
-    bumpTcl = '''\
-create_bump -cell BUMPCELL -pitch [list {0} {0}] -pattern_side [list left {1}]\\
-            -edge_spacing [list [expr {2}] [expr {2}] [expr {2}] [expr {2}]]'''.format(pitch, bumpPerSide, constraints['ioCellHeight'])
+    bumpTcl = 'create_bump -cell BUMPCELL -pitch [list {0} {0}] -pattern_array [list {1} {1}] -loc [list {2} {2}]'.format(bumpPitch, bumpsPerSide, margin)
 
 
     ####################
@@ -121,7 +231,7 @@ source "scripts_own/riscv_core_tsv_f2b.tcl"
 # assign IO bumps
 # the remaining floating bumps are guaranteed to be sufficient for pgBumps since the area is already pre-calculated
 assignBump
-assignPGBumps -nets {{VDD VSS}} -floating -V
+assignPGBumps -nets {{VDD VSS}} -floating -checkerboard
 
 
 ##########################################
@@ -160,18 +270,13 @@ fcroute -type signal -designStyle pio -layerChangeBotLayer metal7 -layerChangeTo
 '''.format(coreDim,
            spacing)
 
-    ##################
-    # Gen TSV script #
-    ##################
-    # 1. parse in all required TSVs
-    # 2. collect them into a set and gen placement script statically
-    tsvTcl, uBumpTcl = tsvTCL(args.design_netlist, constraints['tsvPitchF2B'], constraints['ioCellHeight'], coreDim, spacing, int(pgTSVs), f2b=True)
-    with open('riscv_core_tsv_f2b.tcl', 'w') as f:
-        f.write(tsvTcl)
-    with open('riscv_core_ubump_f2b.tcl', 'w') as f:
-        f.write(uBumpTcl)
+    with open(os.path.join(script_dir, 'fp_3d_f2b_bottom.tcl'), 'w') as f:
+        f.write(fp_tcl_bot)
+    with open(os.path.join(script_dir, 'fp_3d_f2b_top.tcl'), 'w') as f:
+        f.write(fp_tcl_top)
 
-    return fp_tcl_bot, fp_tcl_top, finalArea, constraints['defectDens']
+    # return finalArea, defectDensity, tsvCount, wireBonds
+    return finalArea, constraints['defectDens'], tsvCount, botInfo['ioCount']
 
 
 def parse():
@@ -180,16 +285,16 @@ def parse():
     parser.add_argument('--design-info-top', required=True, type=str)
     parser.add_argument('--design-netlist', required=True, type=str)
     parser.add_argument('--tech-const', required=True, type=str)
+    parser.add_argument('--script-dir', required=False, type=str, default='./')
     return parser.parse_args()
 
-if __name__ == '__main__':
-    bot, top, finalArea, defectDensity = main(parse())
-    with open('fp_3d_f2b_bottom.tcl', 'w') as f:
-        f.write(bot)
-    with open('fp_3d_f2b_top.tcl', 'w') as f:
-        f.write(top)
+def main(args):
+    return f2b(args.design_info_bot, args.design_info_top, args.tech_const, args.design_netlist, args.script_dir)
 
+if __name__ == '__main__':
+    finalArea, defectDensity, tsvCount = main(parse())
     print ('Bot Die Area: {} (um^2)'.format(finalArea))
     print ('Top Die Area: {} (um^2)'.format(finalArea))
+    print ('Total TSVs: {}'.format(tsvCount))
     print ('Defect Density: {} (per cm^2)'.format(defectDensity))
 

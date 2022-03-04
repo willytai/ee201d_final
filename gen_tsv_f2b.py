@@ -20,7 +20,7 @@ class box():
         if y+TSVWIDTH >= self.ury: return False
         return True
 
-def tsvTCL(netlist, tsvPitchF2B, ioCellHeight, coreDim, spacing, pgTSVs, f2b):
+def tsvTCL(netlist, tsvPitch, ioCellHeight, coreDim, spacing, pgTSVs, f2b, start=None):
     tsvPool = list()
     with open(netlist, 'r') as f:
         for line in f:
@@ -31,32 +31,58 @@ def tsvTCL(netlist, tsvPitchF2B, ioCellHeight, coreDim, spacing, pgTSVs, f2b):
                 tsvPool.append(tsvName)
 
     # boundary
-    endx, endy = coreDim+2*spacing+ioCellHeight-tsvPitchF2B*TSV2ioCellSpacingRatio, coreDim+2*spacing+ioCellHeight-tsvPitchF2B*TSV2ioCellSpacingRatio
-    startx, starty = ioCellHeight+tsvPitchF2B*TSV2ioCellSpacingRatio, ioCellHeight+tsvPitchF2B*TSV2ioCellSpacingRatio
+    endx, endy = coreDim+2*spacing+ioCellHeight-tsvPitch*TSV2ioCellSpacingRatio, coreDim+2*spacing+ioCellHeight-tsvPitch*TSV2ioCellSpacingRatio
+    if start is not None:
+        startx, starty = start, start
+    else:
+        startx, starty = ioCellHeight+tsvPitch*TSV2ioCellSpacingRatio, ioCellHeight+tsvPitch*TSV2ioCellSpacingRatio
     # forbidden box (core area)
-    forbidden = box(spacing+ioCellHeight-tsvPitchF2B*TSV2CoreBoxSpacingRatio,
-                    spacing+ioCellHeight-tsvPitchF2B*TSV2CoreBoxSpacingRatio,
-                    coreDim+tsvPitchF2B*2*TSV2CoreBoxSpacingRatio)
+    forbidden = box(spacing+ioCellHeight-tsvPitch*TSV2CoreBoxSpacingRatio,
+                    spacing+ioCellHeight-tsvPitch*TSV2CoreBoxSpacingRatio,
+                    coreDim+tsvPitch*2*TSV2CoreBoxSpacingRatio)
 
     # helper function
-    def nextPos(x, y):
-        x += tsvPitchF2B
+    # state: right, up, left, down
+    #        0      1   2     3
+    def nextPos(x, y, state, startx, starty):
+        if state == 0:
+            x += tsvPitch
+        elif state == 1:
+            y += tsvPitch
+        elif state == 2:
+            x -= tsvPitch
+        elif state == 3:
+            y -= tsvPitch
         # check if valid
-        if x+TSVWIDTH >= endx:
-            return nextPos(startx-tsvPitchF2B, y+tsvPitchF2B)
-        if y+TSVWIDTH >= endy:
-            raise ValueError
+        if x+TSVWIDTH > endx:
+            x -= tsvPitch
+            state = 1
+            return nextPos(x, y, state, startx, starty)
+        if y+TSVWIDTH > endy:
+            y -= tsvPitch
+            state = 2
+            return nextPos(x, y, state, startx, starty)
+        if x < startx:
+            x += tsvPitch
+            state = 3
+            return nextPos(x, y, state, startx, starty)
+        if y <= starty and state == 3:
+            startx, starty = startx+tsvPitch, starty+tsvPitch
+            x, y = startx, starty
+            state = 0
         if forbidden.contains(x, y):
-            return nextPos(x, y)
-        return x, y
+            print (x, y, 'is contained in', forbidden)
+            raise ValueError
+        return x, y, state, startx, starty
     
     tsvTcl = ''
     uBumpTcl = ''
-    x, y = startx, starty
+    x, y = startx-tsvPitch, starty
+    state = 0
     for tsv in tsvPool:
+        x, y, state, startx, starty = nextPos(x, y, state, startx, starty)
         tsvTcl += 'placeInstance {} {} {} -placed\n'.format(tsv, x, y)
         uBumpTcl += 'create_bump -cell BUMPCELL_TSV -loc {} {}\n'.format(x+TSVWIDTH/2, y+TSVWIDTH/2)
-        x, y = nextPos(x, y)
 
     # required pg tsv and ubumps
     uniqueID = 0
@@ -65,16 +91,16 @@ def tsvTCL(netlist, tsvPitchF2B, ioCellHeight, coreDim, spacing, pgTSVs, f2b):
         #      or connect the ubumps to the pg tsv (how the fuck do i do this?)
         #      globalNetConnect VDD/VSS -sinst <instance name> -pin <pin name>
         #      (pg tsv and pg ubumps are named)
+        x, y, state, startx, starty = nextPos(x, y, state, startx, starty)
         tsvTcl += 'addInst -cell TSVD_IN -inst ptsv{} -loc {{{} {}}} -status placed\n'.format(uniqueID, x, y)
         tsvTcl += 'globalNetConnect VDD -type pgpin -sinst ptsv{} -pin in\n'.format(uniqueID)
         uBumpTcl += 'create_bump -cell BUMPCELL_TSV -name_format pubump{} -loc {} {}\n'.format(uniqueID, x+TSVWIDTH/2, y+TSVWIDTH/2)
-        x, y = nextPos(x, y)
         uniqueID += 1
 
+        x, y, state, startx, starty = nextPos(x, y, state, startx, starty)
         tsvTcl += 'addInst -cell TSVD_IN -inst gtsv{} -loc {{{} {}}} -status placed\n'.format(uniqueID, x, y)
         tsvTcl += 'globalNetConnect VSS -type pgpin -sinst gtsv{} -pin in\n'.format(uniqueID)
         uBumpTcl += 'create_bump -cell BUMPCELL_TSV -name_format gubump{} -loc {} {}\n'.format(uniqueID, x+TSVWIDTH/2, y+TSVWIDTH/2)
-        x, y = nextPos(x, y)
         uniqueID += 1
 
     # fill the rest of the space with pg tsvs (no harm)
