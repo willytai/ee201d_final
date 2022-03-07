@@ -6,3 +6,4 @@ __pycache__/
 test/
 fp*.tcl
 riscv_core*.tcl
+timing_check*.tcl
