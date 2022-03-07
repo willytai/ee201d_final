@@ -4,6 +4,7 @@ from gen_fp_3d_f2b import f2b
 from gen_fp_3d_f2f import f2f
 from yield_model import *
 from runInnovus import runInnovusSoC, runInnovusF2B, runInnovusF2F
+from timing_checker import checkTiming
 
 endcolor = '\033[0m'
 red      = '\033[1;31m'
@@ -20,7 +21,7 @@ def main(args):
     print ('---------------------------------------------------------') 
 
     print ('---------------------------f2b---------------------------') 
-    f2bArea, f2bDefectDensity, f2bTSVs, f2bWireBonds = f2b(args.f2b_bot, args.f2b_top, args.tech_const, args.f2b_bot_netlist, args.script_dir)
+    f2bArea, f2bDefectDensity, f2bTSVs, f2bWireBonds, designPeriod = f2b(args.f2b_bot, args.f2b_top, args.tech_const, args.f2b_bot_netlist, args.f2b_top_netlist, args.script_dir)
     print (f'{f2bArea=} (both top and bottom die)')
     print (f'{f2bDefectDensity=}')
     print (f'{f2bTSVs=}')
@@ -28,7 +29,7 @@ def main(args):
     print ('---------------------------------------------------------') 
 
     print ('---------------------------f2b---------------------------') 
-    f2fArea, f2fDefectDensity, f2fTSVs, f2fWireBonds = f2f(args.f2f_bot, args.f2f_top, args.tech_const, args.f2f_bot_netlist, args.script_dir)
+    f2fArea, f2fDefectDensity, f2fTSVs, f2fWireBonds, designPeriod = f2f(args.f2f_bot, args.f2f_top, args.tech_const, args.f2f_bot_netlist, args.f2f_top_netlist, args.script_dir)
     print (f'{f2fArea=} (both top and bottom die)')
     print (f'{f2fDefectDensity=}')
     print (f'{f2fTSVs=}')
@@ -76,14 +77,23 @@ def main(args):
     #    print (f'{yellow}=> Unrecognized option: {gui}, gui disabled{endcolor}')
     gui = False
 
-
     # invoke innovus with subprocess
     if flow == 'soc':
         runInnovusSoC(gui)
     elif flow == 'f2b':
         runInnovusF2B(gui)
+        print (f'{yellow}=> Checking {flow} cross die timing closure{endcolor}')
+        closure = checkTiming('f2b_bot_output/tsv_timing.check', 'f2b_top_output/tsv_timing.check', designPeriod)
     elif flow == 'f2f':
         runInnovusF2F(gui)
+        print (f'{yellow}=> Checking {flow} cross die timing closure{endcolor}')
+        closure = checkTiming('f2f_bot_output/tsv_timing.check', 'f2f_top_output/tsv_timing.check', designPeriod)
+
+    # timing closure report
+    if closure:
+        print (f'{yellow}=> Timing clsure MET for {flow}{endcolor}')
+    else:
+        print (f'{yellow}=> Timing clsure NOT MET for {flow}{endcolor}')
 
 def parse():
     parser = argparse.ArgumentParser()
@@ -91,9 +101,11 @@ def parse():
     parser.add_argument('--f2b-top',         required=True, type=str, help='the synthesis report for the top die in f2b design')
     parser.add_argument('--f2b-bot',         required=True, type=str, help='the synthesized report for the bottom die in f2b design')
     parser.add_argument('--f2b-bot-netlist', required=True, type=str, help='the netlist for the bottom die in f2b design (used for TSV generation)')
+    parser.add_argument('--f2b-top-netlist', required=True, type=str, help='the netlist for the top die in f2b design (used for TSV timing check)')
     parser.add_argument('--f2f-top',         required=True, type=str, help='the synthesized report for the top die in f2f design')
     parser.add_argument('--f2f-bot',         required=True, type=str, help='the synthesis report for the bottom die in f2f design')
     parser.add_argument('--f2f-bot-netlist', required=True, type=str, help='the netlist for the bottom die in f2f design (used for TSV generation)')
+    parser.add_argument('--f2f-top-netlist', required=True, type=str, help='the netlist for the top die in f2f design (used for TSV timing check)')
     parser.add_argument('--tech-const',      required=True, type=str, help='the technology constraint file')
     parser.add_argument('--script-dir',      required=True, type=str, help='the directory containing the scripts (script_own)')
     return parser.parse_args()

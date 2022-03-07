@@ -1,6 +1,7 @@
 import argparse, math, os
 from parser import parse_info, parse_constraints
 from gen_tsv_f2b import box, TSVWIDTH, TSV2ioCellSpacingRatio, TSV2CoreBoxSpacingRatio
+from timing_checker import genTimingCheckScript
 
 
 def tsvTCL(tsvPool, tsvPitch, spacing, pgTSVs, start, dieDim, coreDim, bot=True):
@@ -90,7 +91,7 @@ def tsvTCL(tsvPool, tsvPitch, spacing, pgTSVs, start, dieDim, coreDim, bot=True)
     return tsvTcl, tsvCount
 
 
-def f2f(design_info_bot, design_info_top, tech_const, design_netlist, script_dir):
+def f2f(design_info_bot, design_info_top, tech_const, design_netlist_bot, design_netlist_top, script_dir):
     botInfo = parse_info(design_info_bot)
     topInfo = parse_info(design_info_top)
     constraints = parse_constraints(tech_const)
@@ -165,7 +166,7 @@ def f2f(design_info_bot, design_info_top, tech_const, design_netlist, script_dir
     #################
     # increase dieDim by bumpPitch each round until all TSV fits
     tsvPool = list()
-    with open(design_netlist, 'r') as f:
+    with open(design_netlist_bot, 'r') as f:
         for line in f:
             line = line.strip()
             if line.startswith('TSV_'):
@@ -276,20 +277,27 @@ fcroute -type signal -designStyle pio -layerChangeBotLayer metal7 -layerChangeTo
     with open(os.path.join(script_dir, 'fp_3d_f2f_top.tcl'), 'w') as f:
         f.write(fp_tcl_top)
 
-    return finalArea, constraints['defectDens'], tsvCount, 0
+    timingCheckBot, timingCheckTop = genTimingCheckScript(design_netlist_bot, design_netlist_top)
+    with open(os.path.join(script_dir, 'timing_check_f2f_bot.tcl'), 'w') as f:
+        f.write(timingCheckBot)
+    with open(os.path.join(script_dir, 'timing_check_f2f_top.tcl'), 'w') as f:
+        f.write(timingCheckTop)
+
+    return finalArea, constraints['defectDens'], tsvCount, 0, botInfo['designPeriod']
 
 
 def parse():
     parser = argparse.ArgumentParser()
     parser.add_argument('--design-info-bot', required=True, type=str)
     parser.add_argument('--design-info-top', required=True, type=str)
-    parser.add_argument('--design-netlist', required=True, type=str)
+    parser.add_argument('--design-netlist-bot', required=True, type=str)
+    parser.add_argument('--design-netlist-top', required=True, type=str)
     parser.add_argument('--tech-const', required=True, type=str)
     parser.add_argument('--script-dir', required=False, type=str, default='./')
     return parser.parse_args()
 
 def main(args):
-    return f2f(args.design_info_bot, args.design_info_top, args.tech_const, args.design_netlist, args.script_dir)
+    return f2f(args.design_info_bot, args.design_info_top, args.tech_const, args.design_netlist_bot, args.design_netlist_top, args.script_dir)
 
 if __name__ == '__main__':
     finalArea, defectDensity, tsvCount, wireBonds = main(parse())

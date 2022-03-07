@@ -172,3 +172,6 @@ puts "* Type 'exit' to quit"
 puts "*"
 puts "*************************************************************"
 
+set_message -limit 0 -id TCLCMD-1469
+source "scripts_own/timing_check_f2b_top.tcl" > ${OUTPUTDIR}/tsv_timing.check
+
