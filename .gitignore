@@ -1,0 +1,8 @@
+gitToken
+*.swp
+man/
+template/
+__pycache__/
+test/
+fp*.tcl
+riscv_core*.tcl

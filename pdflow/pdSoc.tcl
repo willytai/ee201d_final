@@ -14,12 +14,12 @@ set init_gnd_net VSS
 
 # MCMM setup
 create_constraint_mode -name CON -sdc_file [list $sdc]
-create_library_set -name WC_LIB_SLOW -timing [list $libdir/NangateOpenCellLibrary_slow_ccs.lib $libdir/sram_32_256_freepdk45_SS_1p0V_25C.lib $libdir/IOCELLBUFANTENNAIN_ss.lib $libdir/IOCELLBUFANTENNAOUT_ss.lib]
+create_library_set -name WC_LIB_SLOW -timing [list $nanlib/NangateOpenCellLibrary_slow_ccs.lib $libdir/sram_32_256_freepdk45_SS_1p0V_25C.lib $libdir/IOCELLBUFANTENNAIN_ss.lib $libdir/IOCELLBUFANTENNAOUT_ss.lib]
 create_rc_corner -name _slow_rc_corner_ -T 125
 create_delay_corner -name WC_SLOW -library_set WC_LIB_SLOW -rc_corner _slow_rc_corner_
 create_analysis_view -name WC_SLOW_VIEW -delay_corner WC_SLOW -constraint_mode CON
 
-create_library_set -name WC_LIB_FAST -timing [list $libdir/NangateOpenCellLibrary_fast_ccs.lib $libdir/sram_32_256_freepdk45_FF_1p0V_25C.lib $libdir/IOCELLBUFANTENNAIN_ff.lib $libdir/IOCELLBUFANTENNAOUT_ff.lib]
+create_library_set -name WC_LIB_FAST -timing [list $nanlib/NangateOpenCellLibrary_fast_ccs.lib $libdir/sram_32_256_freepdk45_FF_1p0V_25C.lib $libdir/IOCELLBUFANTENNAIN_ff.lib $libdir/IOCELLBUFANTENNAOUT_ff.lib]
 create_rc_corner -name _fast_rc_corner_ -T -40
 create_delay_corner -name WC_FAST -library_set WC_LIB_FAST -rc_corner _fast_rc_corner_
 create_analysis_view -name WC_FAST_VIEW -delay_corner WC_FAST -constraint_mode CON

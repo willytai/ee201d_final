@@ -38,6 +38,7 @@ def soc(design_info, tech_const, script_dir):
     minArea2 = (coreDim+minSpacing*2)**2
     finalArea = max(minArea1, minArea2)
     spacing = round((math.sqrt(finalArea)-coreDim)/2, 2)
+    print (f'{coreDim=}')
     print (f'{spacing=}')
 
 

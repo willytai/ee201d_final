@@ -1,4 +1,4 @@
-source "scripts_own/init_3d_f2b_top.tcl"
+source "scripts_own/init_3d_f2f_top.tcl"
 
 # Initialize design
 suppressMessage TECHLIB-436
@@ -36,7 +36,8 @@ report_timing -early -nworst  10 -net > ${OUTPUTDIR}/${DNAME}_init_hold.tarpt
 
 setMaxRouteLayer 7
 
-source "scripts_own/fp_3d_f2b_top.tcl"
+# Source the floorplanning script
+source "scripts_own/fp_3d_f2f_top.tcl"
 
 # Define global power nets
 globalNetConnect VSS -type pgpin -all -pin VSS
@@ -44,7 +45,7 @@ globalNetConnect VDD -type pgpin -all -pin VDD
 
 # Create power structures. DON'T CHANGE addRing statement.
 addRing -layer {top metal5 bottom metal5 left metal6 right metal6} -spacing {top 1.5 bottom 1.5 left 1.5 right 1.5} -width {top 2 bottom 2 left 2 right 2} -center 1 -nets { VDD VSS } -type core_rings -follow io
-addStripe -nets {VSS VDD} -layer metal6 -direction vertical -width 2 -spacing 1.5 -set_to_set_distance 40 -start_from left -start_offset 40 -switch_layer_over_obs false -max_same_layer_jog_length 2 -padcore_ring_top_layer_limit metal10 -padcore_ring_bottom_layer_limit metal1 -block_ring_top_layer_limit metal10 -block_ring_bottom_layer_limit metal1 -use_wire_group 0 -snap_wire_center_to_grid None
+addStripe -nets {VSS VDD} -layer metal6 -direction vertical -width 2 -spacing 1.5 -set_to_set_distance 40 -start_from left -start_offset 20 -switch_layer_over_obs false -max_same_layer_jog_length 2 -padcore_ring_top_layer_limit metal10 -padcore_ring_bottom_layer_limit metal1 -block_ring_top_layer_limit metal10 -block_ring_bottom_layer_limit metal1 -use_wire_group 0 -snap_wire_center_to_grid None
 
 #setSrouteMode -viaConnectToShape { noshape }
 sroute -connect { blockPin padPin corePin floatingStripe } -layerChangeRange { metal1(1) metal10(10) } -blockPinTarget { nearestTarget } -padPinPortConnect { allPort oneGeom } -padPinTarget { nearestTarget } -corePinTarget { firstAfterRowEnd } -floatingStripeTarget { blockring padring ring stripe ringpin blockpin followpin } -allowJogging 1 -crossoverViaLayerRange { metal1(1) metal10(10) } -nets { VDD VSS } -allowLayerChange 1 -blockPin useLef -targetViaLayerRange { metal1(1) metal10(10) }
@@ -55,7 +56,7 @@ report_power -outfile ${OUTPUTDIR}/${DNAME}_beforePlace.parpt
 # Enable placement of IO pins as well
 setPlaceMode -place_global_place_io_pins true -reorderScan false
 placeDesign
-place_opt_design
+#place_opt_design
 
 # Legalize placement if necessary 
 refinePlace
@@ -76,9 +77,9 @@ buildTimingGraph
 # Run clock tree synthesis (CTS)
 set_ccopt_property buffer_cells {BUF_X1 BUF_X2} 
 set_ccopt_property inverter_cells {INV_X1 INV_X2 INV_X4 INV_X8 INV_X16}
-#set_ccopt_property sink_type stop -pin tclock/in
-#set_ccopt_property -pin tclock/in -delay_corner WC_SLOW capacitance_override 0.05
-#set_ccopt_property -pin tclock/in -delay_corner WC_FAST capacitance_override 0.05
+set_ccopt_property sink_type stop -pin tclock/in
+set_ccopt_property -pin tclock/in -delay_corner WC_SLOW capacitance_override 0.05
+set_ccopt_property -pin tclock/in -delay_corner WC_FAST capacitance_override 0.05
 create_ccopt_clock_tree_spec
 ccopt_design -cts
 

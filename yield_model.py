@@ -15,10 +15,10 @@ def bonding_yield(ioCount):
 def thinning_yield():
     return 0.95
 
-def soc_yield(area, density):
+def yieldSoC(area, density):
     return die_yield(area, density)
 
-def f2b_yield(area, density, tsvs, ios):
+def yield3D(area, density, tsvs, ios):
     return (die_yield(area, density)**2)*thinning_yield()*tsv_yield(tsvs)*bonding_yield(ios)
 
 if __name__ == '__main__':

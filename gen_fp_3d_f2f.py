@@ -1,9 +1,9 @@
-import sys, argparse, math
+import argparse, math, os
 from parser import parse_info, parse_constraints
 from gen_tsv_f2b import box, TSVWIDTH, TSV2ioCellSpacingRatio, TSV2CoreBoxSpacingRatio
 
 
-def tsvTCL(tsvPool, tsvPitch, spacing, pgTSVs, start, dieDim, coreDim):
+def tsvTCL(tsvPool, tsvPitch, spacing, pgTSVs, start, dieDim, coreDim, bot=True):
     # boundary
     endx, endy = dieDim - start, dieDim - start
     startx, starty = start, start
@@ -45,49 +45,55 @@ def tsvTCL(tsvPool, tsvPitch, spacing, pgTSVs, start, dieDim, coreDim):
             raise ValueError
         return x, y, state, startx, starty, endx, endy
     
+    tsvCellType = 'TSVD_IN' if not bot else 'TSVD_OUT'
+    tsvCount = 0
     tsvTcl = ''
     x, y = startx-tsvPitch, starty
     state = 0
     for tsv in tsvPool:
         x, y, state, startx, starty, endx, endy = nextPos(x, y, state, startx, starty, endx, endy)
         tsvTcl += 'placeInstance {} {} {} -placed\n'.format(tsv, x-TSVWIDTH/2, y-TSVWIDTH/2)
+        tsvCount += 1
 
     # required pg tsv and ubumps
     uniqueID = 0
     for _ in range(0, pgTSVs, 2):
         x, y, state, startx, starty, endx, endy = nextPos(x, y, state, startx, starty, endx, endy)
-        tsvTcl += 'addInst -cell TSVD_IN -inst ptsv{} -loc {{{} {}}} -status placed\n'.format(uniqueID, x-TSVWIDTH/2, y-TSVWIDTH/2)
+        tsvTcl += 'addInst -cell {} -inst ptsv{} -loc {{{} {}}} -status placed\n'.format(tsvCellType, uniqueID, x-TSVWIDTH/2, y-TSVWIDTH/2)
         tsvTcl += 'globalNetConnect VDD -type pgpin -sinst ptsv{} -pin in\n'.format(uniqueID)
         uniqueID += 1
+        tsvCount += 1
 
         x, y, state, startx, starty, endx, endy = nextPos(x, y, state, startx, starty, endx, endy)
-        tsvTcl += 'addInst -cell TSVD_IN -inst gtsv{} -loc {{{} {}}} -status placed\n'.format(uniqueID, x-TSVWIDTH/2, y-TSVWIDTH/2)
+        tsvTcl += 'addInst -cell {} -inst gtsv{} -loc {{{} {}}} -status placed\n'.format(tsvCellType, uniqueID, x-TSVWIDTH/2, y-TSVWIDTH/2)
         tsvTcl += 'globalNetConnect VSS -type pgpin -sinst gtsv{} -pin in\n'.format(uniqueID)
         uniqueID += 1
+        tsvCount += 1
 
     # fill the rest of the space with pg tsvs (no harm)
-    try:
-        ctype = 'p'
-        while True:
-            x, y, state, startx, starty, endx, endy = nextPos(x, y, state, startx, starty, endx, endy)
-            tsvTcl += 'addInst -cell TSVD_IN -inst {}tsv{} -loc {{{} {}}} -status placed\n'.format(ctype, uniqueID, x-TSVWIDTH/2, y-TSVWIDTH/2)
-            if ctype == 'p':
-                tsvTcl += 'globalNetConnect VDD -type pgpin -sinst ptsv{} -pin in\n'.format(uniqueID)
-            else:
-                tsvTcl += 'globalNetConnect VSS -type pgpin -sinst gtsv{} -pin in\n'.format(uniqueID)
-            uniqueID += 1
-            if ctype == 'p': ctype = 'g'
-            else: ctype = 'p'
-    except Exception as e:
-        pass
+    # harms yield
+    # try:
+    #     ctype = 'p'
+    #     while True:
+    #         x, y, state, startx, starty, endx, endy = nextPos(x, y, state, startx, starty, endx, endy)
+    #         tsvTcl += 'addInst -cell {} -inst {}tsv{} -loc {{{} {}}} -status placed\n'.format(tsvCellType, ctype, uniqueID, x-TSVWIDTH/2, y-TSVWIDTH/2)
+    #         if ctype == 'p':
+    #             tsvTcl += 'globalNetConnect VDD -type pgpin -sinst ptsv{} -pin in\n'.format(uniqueID)
+    #         else:
+    #             tsvTcl += 'globalNetConnect VSS -type pgpin -sinst gtsv{} -pin in\n'.format(uniqueID)
+    #         uniqueID += 1
+    #         if ctype == 'p': ctype = 'g'
+    #         else: ctype = 'p'
+    # except Exception as e:
+    #     pass
 
-    return tsvTcl
+    return tsvTcl, tsvCount
 
 
-def main(args):
-    botInfo = parse_info(args.design_info_bot)
-    topInfo = parse_info(args.design_info_top)
-    constraints = parse_constraints(args.tech_const)
+def f2f(design_info_bot, design_info_top, tech_const, design_netlist, script_dir):
+    botInfo = parse_info(design_info_bot)
+    topInfo = parse_info(design_info_top)
+    constraints = parse_constraints(tech_const)
     bumpPitch = constraints['bumpPitchF2F']
     tsvPitch = constraints['tsvPitchF2F']
     margin = 20
@@ -159,7 +165,7 @@ def main(args):
     #################
     # increase dieDim by bumpPitch each round until all TSV fits
     tsvPool = list()
-    with open(args.design_netlist, 'r') as f:
+    with open(design_netlist, 'r') as f:
         for line in f:
             line = line.strip()
             if line.startswith('TSV_'):
@@ -172,19 +178,28 @@ def main(args):
             print (f'{bumpsPerSide=} {dieDim=}')
             flag = False
             spacing = (dieDim - coreDim - 2*TSVWIDTH) / 2
-            tsvTcl = tsvTCL(tsvPool, tsvPitch, spacing, pgTSVs, margin, dieDim, coreDim)
+            tsvTclBot, tsvCount = tsvTCL(tsvPool, tsvPitch, spacing, pgTSVs, margin, dieDim, coreDim, bot=False) # bot pgTSV gets power from subtrate (like a top layer)
         except Exception as e:
             flag = True
             dieDim += bumpPitch
             bumpsPerSide += 1
+    minSpacing = round((480.4 - coreDim)/2*10)/10
+    while spacing < minSpacing:
+            dieDim += bumpPitch
+            bumpsPerSide += 1
+            print (f'{bumpsPerSide=} {dieDim=}')
+            spacing = (dieDim - coreDim - 2*TSVWIDTH) / 2
+            tsvTclBot, tsvCount = tsvTCL(tsvPool, tsvPitch, spacing, pgTSVs, margin, dieDim, coreDim, bot=False) # bot pgTSV gets power from subtrate (like a top layer)
+    finalArea = dieDim**2
+    spacing = minSpacing
     print (f'{spacing=}')
 
 
     ##################
     # Gen TSV script #
     ##################
-    with open('riscv_core_tsv_f2f.tcl', 'w') as f:
-        f.write(tsvTcl)
+    with open(os.path.join(script_dir, 'riscv_core_tsv_f2f_bot.tcl'), 'w') as f:
+        f.write(tsvTclBot)
 
 
     ###############
@@ -206,7 +221,7 @@ floorPlan -site FreePDK45_38x28_10R_NP_162NW_34O -s {0} {0} {1} {1} {1} {1}
 ##############
 # Place TSVs #
 ##############
-source "scripts_own/riscv_core_tsv_f2f.tcl"
+source "scripts_own/riscv_core_tsv_f2f_bot.tcl"
 
 
 ##############
@@ -224,8 +239,8 @@ assignPGBumps -nets {{VDD VSS}} -floating -checkerboard
 ##########################################
 # RDL Routing between IO cells and bumps #
 ##########################################
-#setFlipChipMode -route_style 45DegreeRoute
-#fcroute -type signal -designStyle pio -layerChangeBotLayer metal7 -layerChangeTopLayer metal10 -routeWidth 0
+setFlipChipMode -route_style 45DegreeRoute
+fcroute -type signal -designStyle pio -layerChangeBotLayer metal7 -layerChangeTopLayer metal10 -routeWidth 0
 '''.format(coreDim,
            spacing,
            uBumpTcl)
@@ -244,7 +259,8 @@ floorPlan -site FreePDK45_38x28_10R_NP_162NW_34O -s {0} {0} {1} {1} {1} {1}
 # assign IO bumps
 # the remaining floating bumps are guaranteed to be sufficient for pgBumps since the area is already pre-calculated
 assignBump
-assignPGBumps -nets {{VDD VSS}} -floating -V
+assignPGBumps -nets {{VDD VSS}} -floating -checkerboard
+#assignPGBumps -nets {{VDD VSS}} -floating -V
 
 ##########################################
 # RDL Routing between IO cells and bumps #
@@ -255,7 +271,12 @@ fcroute -type signal -designStyle pio -layerChangeBotLayer metal7 -layerChangeTo
            spacing,
            uBumpTcl)
 
-    return fp_tcl_bot, fp_tcl_top
+    with open(os.path.join(script_dir, 'fp_3d_f2f_bottom.tcl'), 'w') as f:
+        f.write(fp_tcl_bot)
+    with open(os.path.join(script_dir, 'fp_3d_f2f_top.tcl'), 'w') as f:
+        f.write(fp_tcl_top)
+
+    return finalArea, constraints['defectDens'], tsvCount, 0
 
 
 def parse():
@@ -264,11 +285,16 @@ def parse():
     parser.add_argument('--design-info-top', required=True, type=str)
     parser.add_argument('--design-netlist', required=True, type=str)
     parser.add_argument('--tech-const', required=True, type=str)
+    parser.add_argument('--script-dir', required=False, type=str, default='./')
     return parser.parse_args()
 
+def main(args):
+    return f2f(args.design_info_bot, args.design_info_top, args.tech_const, args.design_netlist, args.script_dir)
+
 if __name__ == '__main__':
-    bot, top = main(parse())
-    with open('fp_3d_f2f_bottom.tcl', 'w') as f:
-        f.write(bot)
-    with open('fp_3d_f2f_top.tcl', 'w') as f:
-        f.write(top)
+    finalArea, defectDensity, tsvCount, wireBonds = main(parse())
+    print ('Bot Die Area: {} (um^2)'.format(finalArea))
+    print ('Top Die Area: {} (um^2)'.format(finalArea))
+    print ('Total TSVs: {}'.format(tsvCount))
+    print ('Defect Density: {} (per cm^2)'.format(defectDensity))
+    print ('# Wire Bonds: {}'.format(wireBonds))

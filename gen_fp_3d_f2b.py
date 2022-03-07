@@ -3,10 +3,13 @@ from parser import parse_info, parse_constraints
 from gen_tsv_f2b import box, TSVWIDTH, TSV2ioCellSpacingRatio, TSV2CoreBoxSpacingRatio
 
 
-def tsvTCL(tsvPool, tsvPitch, spacing, pgTSVs, start, dieDim, coreDim, ioCellHeight):
+def tsvTCL(tsvPool, tsvPitch, spacing, pgTSVs, start, dieDim, coreDim, ioCellHeight, bot=True):
     # boundary
     endx, endy = dieDim - start, dieDim - start
-    startx, starty = start, start
+    startx, starty = start+3, start+3
+    if bot:
+        startx += 3.8
+        starty += 3.8
     # forbidden box (core area)
     forbidden = box(spacing+ioCellHeight, spacing+ioCellHeight, coreDim)
 
@@ -45,6 +48,7 @@ def tsvTCL(tsvPool, tsvPitch, spacing, pgTSVs, start, dieDim, coreDim, ioCellHei
             raise ValueError
         return x, y, state, startx, starty, endx, endy
     
+    tsvCellType = 'TSVD_IN' if not bot else 'TSVD_OUT'
     tsvCount = 0
     tsvTcl = ''
     uBumpTcl = ''
@@ -60,14 +64,14 @@ def tsvTCL(tsvPool, tsvPitch, spacing, pgTSVs, start, dieDim, coreDim, ioCellHei
     uniqueID = 0
     for _ in range(0, pgTSVs, 2):
         x, y, state, startx, starty, endx, endy = nextPos(x, y, state, startx, starty, endx, endy)
-        tsvTcl += 'addInst -cell TSVD_IN -inst ptsv{} -loc {{{} {}}} -status placed\n'.format(uniqueID, x-TSVWIDTH/2, y-TSVWIDTH/2)
+        tsvTcl += 'addInst -cell {} -inst ptsv{} -loc {{{} {}}} -status placed\n'.format(tsvCellType, uniqueID, x-TSVWIDTH/2, y-TSVWIDTH/2)
         tsvTcl += 'globalNetConnect VDD -type pgpin -sinst ptsv{} -pin in\n'.format(uniqueID)
         uBumpTcl += 'create_bump -cell BUMPCELL_TSV -name_format pubump{} -loc {} {}\n'.format(uniqueID, x, y)
         uniqueID += 1
         tsvCount += 1
 
         x, y, state, startx, starty, endx, endy = nextPos(x, y, state, startx, starty, endx, endy)
-        tsvTcl += 'addInst -cell TSVD_IN -inst gtsv{} -loc {{{} {}}} -status placed\n'.format(uniqueID, x-TSVWIDTH/2, y-TSVWIDTH/2)
+        tsvTcl += 'addInst -cell {} -inst gtsv{} -loc {{{} {}}} -status placed\n'.format(tsvCellType, uniqueID, x-TSVWIDTH/2, y-TSVWIDTH/2)
         tsvTcl += 'globalNetConnect VSS -type pgpin -sinst gtsv{} -pin in\n'.format(uniqueID)
         uBumpTcl += 'create_bump -cell BUMPCELL_TSV -name_format gubump{} -loc {} {}\n'.format(uniqueID, x, y)
         uniqueID += 1
@@ -79,7 +83,7 @@ def tsvTCL(tsvPool, tsvPitch, spacing, pgTSVs, start, dieDim, coreDim, ioCellHei
     #     ctype = 'p'
     #     while True:
     #         x, y, state, startx, starty, endx, endy = nextPos(x, y, state, startx, starty, endx, endy)
-    #         tsvTcl += 'addInst -cell TSVD_IN -inst {}tsv{} -loc {{{} {}}} -status placed\n'.format(ctype, uniqueID, x-TSVWIDTH/2, y-TSVWIDTH/2)
+    #         tsvTcl += 'addInst -cell {} -inst {}tsv{} -loc {{{} {}}} -status placed\n'.format(tsvCellType, ctype, uniqueID, x-TSVWIDTH/2, y-TSVWIDTH/2)
     #         tsvCount += 1
     #         if ctype == 'p':
     #             tsvTcl += 'globalNetConnect VDD -type pgpin -sinst ptsv{} -pin in\n'.format(uniqueID)
@@ -184,7 +188,8 @@ def f2b(design_info_bot, design_info_top, tech_const, design_netlist, script_dir
             print (f'{bumpsPerSide=} {dieDim=}')
             flag = False
             spacing = (dieDim - coreDim - 2*ioCellHeight) / 2
-            tsvTcl, uBumpTcl, tsvCount = tsvTCL(tsvPool, tsvPitch, spacing, pgTSVs, margin, dieDim, coreDim, ioCellHeight)
+            tsvTclBot, uBumpTcl, tsvCount = tsvTCL(tsvPool, tsvPitch, spacing, pgTSVs, margin, dieDim, coreDim, ioCellHeight, bot=True)
+            tsvTclTop, uBumpTcl, tsvCount = tsvTCL(tsvPool, tsvPitch, spacing, pgTSVs, margin, dieDim, coreDim, ioCellHeight, bot=False)
         except Exception as e:
             flag = True
             dieDim += bumpPitch
@@ -196,8 +201,10 @@ def f2b(design_info_bot, design_info_top, tech_const, design_netlist, script_dir
     ############################
     # Gen TSV and ubump script #
     ############################
-    with open(os.path.join(script_dir, 'riscv_core_tsv_f2b.tcl'), 'w') as f:
-        f.write('{}'.format(tsvTcl))
+    with open(os.path.join(script_dir, 'riscv_core_tsv_f2b_bot.tcl'), 'w') as f:
+        f.write('{}'.format(tsvTclBot))
+    with open(os.path.join(script_dir, 'riscv_core_tsv_f2b_top.tcl'), 'w') as f:
+        f.write('{}'.format(tsvTclTop))
     with open(os.path.join(script_dir, 'riscv_core_ubump_f2b.tcl'), 'w') as f:
         f.write('{}'.format(uBumpTcl))
 
@@ -221,7 +228,7 @@ floorPlan -site FreePDK45_38x28_10R_NP_162NW_34O -s {0} {0} {1} {1} {1} {1}
 ##############
 # Place TSVs #
 ##############
-source "scripts_own/riscv_core_tsv_f2b.tcl"
+source "scripts_own/riscv_core_tsv_f2b_bot.tcl"
 
 
 #############
@@ -252,7 +259,7 @@ floorPlan -site FreePDK45_38x28_10R_NP_162NW_34O -s {0} {0} {1} {1} {1} {1}
 ##############
 # Place TSVs #
 ##############
-source "scripts_own/riscv_core_tsv_f2b.tcl"
+source "scripts_own/riscv_core_tsv_f2b_top.tcl"
 
 ##############
 # for ubumps #
