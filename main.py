@@ -1,10 +1,16 @@
-import argparse, os, subprocess, sys
+import argparse, os, subprocess, sys, signal
 from gen_fp_soc import soc
 from gen_fp_3d_f2b import f2b
 from gen_fp_3d_f2f import f2f
 from yield_model import *
 from runInnovus import runInnovusSoC, runInnovusF2B, runInnovusF2F
 from timing_checker import checkTiming
+
+TIMEOUT = 10
+def interrupt(signum, frame):
+    print (f'Time out')
+    raise ValueError
+signal.signal(signal.SIGALRM, interrupt)
 
 endcolor = '\033[0m'
 red      = '\033[1;31m'
@@ -52,7 +58,12 @@ def main(args):
     choices.append((f2fYield, 'f2f'))
     choices.sort(key=lambda x: x[0], reverse=True)
     print (f'{yellow}=> The flow with the highest estimated yield is: {choices[0][1]} (yield={choices[0][0]}){endcolor}')
-    flow = input(f'{yellow}=> Choose a flow to continue [soc/f2b/f2f] (hit enter for default: {choices[0][1]}): {endcolor}').strip().lower()
+    signal.alarm(TIMEOUT)
+    try:
+        flow = input(f'{yellow}=> Choose a flow to continue [soc/f2b/f2f] (hit enter for default: {choices[0][1]}): {endcolor}').strip().lower()
+    except Exception:
+        flow = ''
+    signal.alarm(0)
     if flow == '':
         print (f'{yellow}=> Using default: {choices[0][1]}{endcolor}')
         flow = choices[0][1]
@@ -80,6 +91,7 @@ def main(args):
     # invoke innovus with subprocess
     if flow == 'soc':
         runInnovusSoC(gui)
+        sys.exit(0)
     elif flow == 'f2b':
         runInnovusF2B(gui)
         print (f'{yellow}=> Checking {flow} cross die timing closure{endcolor}')
@@ -91,9 +103,9 @@ def main(args):
 
     # timing closure report
     if closure:
-        print (f'{yellow}=> Timing clsure MET for {flow}{endcolor}')
+        print (f'{yellow}=> Timing closure MET for {flow}{endcolor}')
     else:
-        print (f'{yellow}=> Timing clsure NOT MET for {flow}{endcolor}')
+        print (f'{yellow}=> Timing closure NOT MET for {flow}{endcolor}')
 
 def parse():
     parser = argparse.ArgumentParser()
