@@ -4,6 +4,7 @@ man/
 template/
 __pycache__/
 test/
+shell/
 fp*.tcl
 riscv_core*.tcl
 timing_check*.tcl

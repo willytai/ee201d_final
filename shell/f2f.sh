@@ -1,2 +1,0 @@
-python3 gen_fp_3d_f2f.py --design-info-bot ../netlist/riscv_bottom_f2f_io_t1.rep --design-info-top ../netlist/riscv_top_f2f_io_t1.rep --design-netlist-bot ../netlist/riscv_bottom_f2f_io.sv --design-netlist-top ../netlist/riscv_top_f2f_io.sv --tech-const ../tech/tech_const_2.txt
-#python3 gen_fp_3d_f2f.py --design-info-bot ../netlist/riscv_bottom_f2f_io_t1.rep --design-info-top ../netlist/riscv_top_f2f_io_t1.rep --design-netlist-bot ../netlist/riscv_bottom_f2f_io.sv --design-netlist-top ../netlist/riscv_top_f2f_io.sv --tech-const ../tech/tech_const_1.txt
