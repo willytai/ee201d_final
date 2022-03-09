@@ -64,13 +64,18 @@ def checkTiming(botrpt, toprpt, clk):
         else:
             timeCrossDie[tsv] = None
     timingClosureMet = True
+    count = 0
     for tsv, crossDieDelay in timeCrossDie.items():
         if crossDieDelay is None: continue
         if crossDieDelay > clk:
             timingClosureMet = False
+            count += 1
             print (f'   1 or more signals that pass through TSV: {tsv} has negative setup slack: {clk:.2f}(required) - {crossDieDelay:.2f}(arrival) = {clk-crossDieDelay:.2f} (ns)')
+    print (f'{count} paths greater than clock cycle')
     return timingClosureMet
 
 if __name__ == '__main__':
-    checkTiming('../f2f_bot_output/tsv_timing.check', '../f2f_top_output/tsv_timing.check', 5)
-    #checkTiming('../f2b_bot_output/tsv_timing.check', '../f2b_top_output/tsv_timing.check', 5)
+    print ('f2b')
+    checkTiming('f2b_bot_output/tsv_timing.check', 'f2b_top_output/tsv_timing.check', 5)
+    print ('f2f')
+    checkTiming('f2f_bot_output/tsv_timing.check', 'f2f_top_output/tsv_timing.check', 5)

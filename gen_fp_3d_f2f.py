@@ -184,7 +184,10 @@ def f2f(design_info_bot, design_info_top, tech_const, design_netlist_bot, design
             flag = True
             dieDim += bumpPitch
             bumpsPerSide += 1
-    minSpacing = round((480.4 - coreDim)/2*10)/10
+    if bumpPitch != 10:
+        minSpacing = round((480.4 - coreDim)/2*10)/10
+    else:
+        minSpacing = spacing
     while spacing < minSpacing:
             dieDim += bumpPitch
             bumpsPerSide += 1
@@ -268,6 +271,12 @@ assignPGBumps -nets {{VDD VSS}} -floating -checkerboard
 ##########################################
 setFlipChipMode -route_style 45DegreeRoute
 fcroute -type signal -designStyle pio -layerChangeBotLayer metal7 -layerChangeTopLayer metal10 -routeWidth 0
+
+#############
+# SRAM Cell #
+#############
+placeInstance riscv_cache/data_memory_bus_data_memory [dbGet top.fPlan.coreBox_llx] [dbGet top.fPlan.coreBox_lly] -placed
+placeInstance riscv_cache/text_memory_bus_text_memory [expr [dbGet top.fPlan.coreBox_urx]-147.98] [expr [dbGet top.fPlan.coreBox_ury]-120.82] -placed
 '''.format(coreDim,
            spacing,
            uBumpTcl)
@@ -300,7 +309,7 @@ def main(args):
     return f2f(args.design_info_bot, args.design_info_top, args.tech_const, args.design_netlist_bot, args.design_netlist_top, args.script_dir)
 
 if __name__ == '__main__':
-    finalArea, defectDensity, tsvCount, wireBonds = main(parse())
+    finalArea, defectDensity, tsvCount, wireBonds, clk = main(parse())
     print ('Bot Die Area: {} (um^2)'.format(finalArea))
     print ('Top Die Area: {} (um^2)'.format(finalArea))
     print ('Total TSVs: {}'.format(tsvCount))
