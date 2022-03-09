@@ -58,8 +58,13 @@
   For the 3D flow (F2B/F2F), there will be additional timing closure check after the physical design flow is finished.
   The number of paths that has a longer arrival time than the clock cycle will be printed like so:
   ```
+  f2b
      1 or more signals that pass through TSV: tinst26 has negative setup slack: 5.00(required) - 6.17(arrival) = -1.17 (ns)
      1 or more signals that pass through TSV: tinst27 has negative setup slack: 5.00(required) - 6.12(arrival) = -1.12 (ns)
+     .
+     .
+     .
+     .
      1 or more signals that pass through TSV: tinst28 has negative setup slack: 5.00(required) - 6.21(arrival) = -1.21 (ns)
      1 or more signals that pass through TSV: tinst29 has negative setup slack: 5.00(required) - 6.21(arrival) = -1.21 (ns)
      1 or more signals that pass through TSV: tinst3 has negative setup slack: 5.00(required) - 6.35(arrival) = -1.35 (ns)
