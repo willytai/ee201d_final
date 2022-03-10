@@ -199,11 +199,95 @@ def f2f(design_info_bot, design_info_top, tech_const, design_netlist_bot, design
     print (f'{spacing=}')
 
 
-    ##################
-    # Gen TSV script #
-    ##################
+    ##############################
+    # Gen pg/subtrate TSV script #
+    ##############################
     with open(os.path.join(script_dir, 'riscv_core_tsv_f2f_bot.tcl'), 'w') as f:
         f.write(tsvTclBot)
+
+    #####################
+    # Gen IO TSV script #
+    #####################
+    # replicate placement to match connections
+    # mirror the placement by x=mid
+    botTSVs = list()
+    topTSVs = list()
+    with open(design_netlist_bot) as f:
+        for line in f:
+            line = line.strip()
+            if line.startswith('TSV'):
+                tsv = line.split()[1].split('(')[0]
+                if tsv[0] != 'p':
+                    botTSVs.append(tsv)
+    with open(design_netlist_top) as f:
+        for line in f:
+            line = line.strip()
+            if line.startswith('TSV'):
+                tsv = line.split()[1].split('(')[0]
+                if tsv[0] != 'p':
+                    topTSVs.append(tsv)
+    botTSVs = sorted(botTSVs)
+    topTSVs = sorted(topTSVs)
+    assert botTSVs == topTSVs
+    tsvlist  = topTSVs
+    botleft  = tsvlist[0:42]
+    botbot   = tsvlist[42:84]
+    botright = tsvlist[84:126]
+    bottop   = tsvlist[126:168]
+    topleft  = tsvlist[84:126]
+    topright = tsvlist[0:42]
+    topbot   = botbot[::-1]
+    toptop   = bottop[::-1]
+    tsvIObot = 'set startx [expr 0]\nset starty [expr 0]\nset endx [dbGet top.fPlan.box_urx]\nset endy [dbGet top.fPlan.box_ury]\nset ioPitchy [expr ($endy-18.0)/41]\nset ioPitchx [expr ($endx-18.0)/41]\n'
+    tsvIOtop = 'set startx [expr 0]\nset starty [expr 0]\nset endx [dbGet top.fPlan.box_urx]\nset endy [dbGet top.fPlan.box_ury]\nset ioPitchy [expr ($endy-18.0)/41]\nset ioPitchx [expr ($endx-18.0)/41]\n'
+    tsvIObot += 'set left {'
+    tsvIOtop += 'set left {'
+    for tsv in botleft: tsvIObot += f'{tsv} '
+    for tsv in topleft: tsvIOtop += f'{tsv} '
+    tsvIObot += '}\n'
+    tsvIOtop += '}\n'
+    tsvIObot += 'set right {'
+    tsvIOtop += 'set right {'
+    for tsv in botright: tsvIObot += f'{tsv} '
+    for tsv in topright: tsvIOtop += f'{tsv} '
+    tsvIObot += '}\n'
+    tsvIOtop += '}\n'
+    tsvIObot += 'set bot {'
+    tsvIOtop += 'set bot {'
+    for tsv in botbot: tsvIObot += f'{tsv} '
+    for tsv in topbot: tsvIOtop += f'{tsv} '
+    tsvIObot += '}\n'
+    tsvIOtop += '}\n'
+    tsvIObot += 'set top {'
+    tsvIOtop += 'set top {'
+    for tsv in bottop: tsvIObot += f'{tsv} '
+    for tsv in toptop: tsvIOtop += f'{tsv} '
+    tsvIObot += '}\n'
+    tsvIOtop += '}\n'
+    # place left
+    tsvIObot += 'set xloc [expr $startx]\nset yloc [expr $starty+6.0]\n'
+    tsvIObot += 'foreach tsv $left {\n\tplaceInstance $tsv $xloc $yloc -placed\n\tset yloc [expr $yloc+$ioPitchy]\n}\n'
+    tsvIOtop += 'set xloc [expr $startx]\nset yloc [expr $starty+6.0]\n'
+    tsvIOtop += 'foreach tsv $left {\n\tplaceInstance $tsv $xloc $yloc -placed\n\tset yloc [expr $yloc+$ioPitchy]\n}\n'
+    # place right
+    tsvIObot += 'set xloc [expr $endx-6.0]\nset yloc [expr $starty+6.0]\n'
+    tsvIObot += 'foreach tsv $right {\n\tplaceInstance $tsv $xloc $yloc -placed\n\tset yloc [expr $yloc+$ioPitchy]\n}\n'
+    tsvIOtop += 'set xloc [expr $endx-6.0]\nset yloc [expr $starty+6.0]\n'
+    tsvIOtop += 'foreach tsv $right {\n\tplaceInstance $tsv $xloc $yloc -placed\n\tset yloc [expr $yloc+$ioPitchy]\n}\n'
+    # place bottom
+    tsvIObot += 'set xloc [expr $startx+6.0]\nset yloc [expr $starty]\n'
+    tsvIObot += 'foreach tsv $bot {\n\tplaceInstance $tsv $xloc $yloc -placed\n\tset xloc [expr $xloc+$ioPitchx]\n}\n'
+    tsvIOtop += 'set xloc [expr $startx+6.0]\nset yloc [expr $starty]\n'
+    tsvIOtop += 'foreach tsv $bot {\n\tplaceInstance $tsv $xloc $yloc -placed\n\tset xloc [expr $xloc+$ioPitchx]\n}\n'
+    # place top
+    tsvIObot += 'set xloc [expr $startx+6.0]\nset yloc [expr $endy-6.0]\n'
+    tsvIObot += 'foreach tsv $top {\n\tplaceInstance $tsv $xloc $yloc -placed\n\tset xloc [expr $xloc+$ioPitchx]\n}\n'
+    tsvIOtop += 'set xloc [expr $startx+6.0]\nset yloc [expr $endy-6.0]\n'
+    tsvIOtop += 'foreach tsv $top {\n\tplaceInstance $tsv $xloc $yloc -placed\n\tset xloc [expr $xloc+$ioPitchx]\n}\n'
+    with open(os.path.join(script_dir, 'riscv_core_tsv_f2f_io_bot.tcl'), 'w') as f:
+        f.write(tsvIObot)
+    with open(os.path.join(script_dir, 'riscv_core_tsv_f2f_io_top.tcl'), 'w') as f:
+        f.write(tsvIOtop)
 
 
     ###############
@@ -226,6 +310,7 @@ floorPlan -site FreePDK45_38x28_10R_NP_162NW_34O -s {0} {0} {1} {1} {1} {1}
 # Place TSVs #
 ##############
 source "scripts_own/riscv_core_tsv_f2f_bot.tcl"
+source "scripts_own/riscv_core_tsv_f2f_io_bot.tcl"
 
 
 ##############
@@ -254,6 +339,12 @@ fcroute -type signal -designStyle pio -layerChangeBotLayer metal7 -layerChangeTo
 # floorPlan #
 #############
 floorPlan -site FreePDK45_38x28_10R_NP_162NW_34O -s {0} {0} {1} {1} {1} {1}
+
+
+##############
+# Place TSVs #
+##############
+source "scripts_own/riscv_core_tsv_f2f_io_top.tcl"
 
 ##############
 # for ubumps #
