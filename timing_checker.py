@@ -88,29 +88,41 @@ def checkTiming(botrpt, toprpt, clk):
         if len(botNets) > 0 and len(topNets) > 0 and botNets[-1] == topNets[0]:
             topNets[0] += f' (signal crossing \'{tsv}\' from bottom die to top die)'
             allNets = botNets[:-1] + topNets
+        if len(topNets) == 0: enddie = startdie
+        if len(botNets) == 0: startdie = enddie
         if len(allNets) > 0:
             allNets[0] += f' (starting net, {startdie})'
             allNets[-1] += f' (terminal net, {enddie})'
         if botDelay is not None and topDelay is not None:
-            timeCrossDie[tsv] = (botDelay + topDelay, allNets)
+            timeCrossDie[tsv] = (botDelay + topDelay, allNets, '')
         elif botDelay is not None:
-            timeCrossDie[tsv] = (2*botDelay, allNets)
+            timeCrossDie[tsv] = (2*botDelay, allNets, 'bottom die')
         elif topDelay is not None:
-            timeCrossDie[tsv] = (2*topDelay, allNets)
+            timeCrossDie[tsv] = (2*topDelay, allNets, 'top die')
         else:
             timeCrossDie[tsv] = None
     timingClosureMet = True
     count = 0
     for tsv, data in timeCrossDie.items():
         if data is None: continue
-        crossDieDelay, nets = data
+        crossDieDelay, nets, die = data
         if crossDieDelay > clk:
             timingClosureMet = False
             count += 1
-            print (f'   A signal that passes through TSV: {tsv}, has arrival time: {crossDieDelay:.2f} (ns), which is greater than clock cycle: {clk:.2f} (ns)')
+            print (f'   The signal that passes through TSV: {tsv}, has arrival time: {crossDieDelay:.2f} (ns), which is greater than clock cycle: {clk:.2f} (ns) (NOT MET)')
             print (f'       -------- nets --------')
             for net in nets:
                 print (f'       - {net}')
+            if len(die):
+                print (f'       - connection failed on the {die}, estimating arrival time of cross-die signal by doubling the value')
+            print (f'       ----------------------')
+        else:
+            print (f'   The signal that passes through TSV: {tsv}, has arrival time: {crossDieDelay:.2f} (ns), which is smaller than clock cycle: {clk:.2f} (ns) (MET)')
+            print (f'       -------- nets --------')
+            for net in nets:
+                print (f'       - {net}')
+            if len(die):
+                print (f'       - connection failed on the {die}, estimating arrival time of cross-die signal by doubling the value')
             print (f'       ----------------------')
     print (f'{count} paths greater than clock cycle')
     return timingClosureMet
@@ -118,5 +130,5 @@ def checkTiming(botrpt, toprpt, clk):
 if __name__ == '__main__':
     print ('f2b')
     checkTiming('f2b_bot_output/tsv_timing.check', 'f2b_top_output/tsv_timing.check', 5)
-    print ('f2f')
-    checkTiming('f2f_bot_output/tsv_timing.check', 'f2f_top_output/tsv_timing.check', 5)
+    #print ('f2f')
+    #checkTiming('f2f_bot_output/tsv_timing.check', 'f2f_top_output/tsv_timing.check', 5)

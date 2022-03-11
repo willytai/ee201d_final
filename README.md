@@ -58,25 +58,61 @@
   For the 3D flow (F2B/F2F), there will be additional timing closure check after the physical design flow is finished.
   The number of paths that has a longer arrival time than the clock cycle will be printed like so:
   ```
-  f2b
-     1 or more signals that pass through TSV: tinst26 has negative setup slack: 5.00(required) - 6.17(arrival) = -1.17 (ns)
-     1 or more signals that pass through TSV: tinst27 has negative setup slack: 5.00(required) - 6.12(arrival) = -1.12 (ns)
-     .
-     .
-     .
-     .
-     1 or more signals that pass through TSV: tinst28 has negative setup slack: 5.00(required) - 6.21(arrival) = -1.21 (ns)
-     1 or more signals that pass through TSV: tinst29 has negative setup slack: 5.00(required) - 6.21(arrival) = -1.21 (ns)
-     1 or more signals that pass through TSV: tinst3 has negative setup slack: 5.00(required) - 6.35(arrival) = -1.35 (ns)
-     1 or more signals that pass through TSV: tinst30 has negative setup slack: 5.00(required) - 6.03(arrival) = -1.03 (ns)
-     1 or more signals that pass through TSV: tinst31 has negative setup slack: 5.00(required) - 6.14(arrival) = -1.14 (ns)
-     1 or more signals that pass through TSV: tinst4 has negative setup slack: 5.00(required) - 6.26(arrival) = -1.26 (ns)
-     1 or more signals that pass through TSV: tinst5 has negative setup slack: 5.00(required) - 6.32(arrival) = -1.32 (ns)
-     1 or more signals that pass through TSV: tinst6 has negative setup slack: 5.00(required) - 6.27(arrival) = -1.27 (ns)
-     1 or more signals that pass through TSV: tinst7 has negative setup slack: 5.00(required) - 6.17(arrival) = -1.17 (ns)
-     1 or more signals that pass through TSV: tinst8 has negative setup slack: 5.00(required) - 6.06(arrival) = -1.06 (ns)
-     1 or more signals that pass through TSV: tinst9 has negative setup slack: 5.00(required) - 6.10(arrival) = -1.10 (ns)
-  64 paths greater than clock cycle
+  f2f
+      The signal that passes through TSV: tbus_read_data31, has arrival time: 4.48 (ns), which is smaller than clock cycle: 5.00 (ns) (MET)
+          -------- nets --------
+          - clock_int (starting net, top)
+          - bus_read_data_int[31]
+          - FE_OFN235_bus_read_data_int_31
+          - bus_read_data[31] (signal crossing 'tbus_read_data31' from top die to bottom die)
+          - bus_read_data_int[31]
+          - n_844
+          - n_20088
+          - n_4178
+          - n_4923
+          - n_526
+          - n_5562
+          - n_5635
+          - n_5708 (terminal net, bottom)
+          ----------------------
+        .
+        .
+        .
+       The signal that passes through TSV: tpc1, has arrival time: 0.86 (ns), which is smaller than clock cycle: 5.00 (ns) (MET)
+           -------- nets --------
+           - clock_int (starting net, bottom)
+           - pc_int[1]
+           - FE_OFN109_pc_int_1
+           - pc[1] (signal crossing 'tpc1' from bottom die to top die)
+           - pc_int[1]
+           - FE_OFN164_pc_int_1 (terminal net, top)
+           ----------------------
+        .
+        .
+        .
+       The signal that passes through TSV: tpc9, has arrival time: 2.18 (ns), which is smaller than clock cycle: 5.00 (ns) (MET)
+           -------- nets --------
+           - clock_int (starting net, bottom)
+           - pc_int[9]
+           - FE_OFN89_pc_int_9
+           - FE_OFN90_pc_int_9
+           - pc[9] (terminal net, bottom)
+           - connection failed on the bottom die, estimating arrival time of cross-die signal by doubling the value
+        .
+        .
+        .
+       The signal that passes through TSV: tinst8, has arrival time: 6.36 (ns), which is greater than clock cycle: 5.00 (ns) (NOT MET)
+           -------- nets --------
+           - clock_int (starting net, top)
+           - inst_int[8]
+           - FE_OFN315_inst_int_8
+           - inst[8] (terminal net, top)
+           - connection failed on the top die, estimating arrival time of cross-die signal by doubling the value
+           ----------------------
+        .
+        .
+        .
+  1 paths greater than clock cycle
   ```
 
 ## Other Testcases
