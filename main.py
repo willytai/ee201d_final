@@ -34,7 +34,7 @@ def main(args):
     print (f'{f2bWireBonds=}')
     print ('---------------------------------------------------------') 
 
-    print ('---------------------------f2b---------------------------') 
+    print ('---------------------------f2f---------------------------')
     f2fArea, f2fDefectDensity, f2fTSVs, f2fWireBonds, designPeriod = f2f(args.f2f_bot, args.f2f_top, args.tech_const, args.f2f_bot_netlist, args.f2f_top_netlist, args.script_dir)
     print (f'{f2fArea=} (both top and bottom die)')
     print (f'{f2fDefectDensity=}')
